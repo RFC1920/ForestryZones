@@ -28,7 +28,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.3")]
+    [Info("Forestry Zones", "RFC1920", "1.0.4")]
     [Description("Protect the forest in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -46,11 +46,16 @@ namespace Oxide.Plugins
             LoadConfigVariables();
             foreach (BuildingPrivlidge tc in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
             {
-                if (!tc.IsValid()) continue;
+                DoLog($"Checking TC at {tc.transform.position.ToString()}");
+                if (!(tc as BaseEntity).IsValid()) continue;
 
                 BasePlayer pl = BasePlayer.FindByID(tc.OwnerID);
-                if (pl == null) continue;
-                if (pl?.IPlayer.HasPermission(permFZones) == false && configData.requirePermission)
+                if (pl == null)
+                {
+                    pl = BasePlayer.FindSleeping(tc.OwnerID);
+                    if (pl == null) continue;
+                }
+                if (!permission.UserHasPermission(pl.UserIDString, permFZones) && configData.requirePermission)
                 {
                     DoLog($"Permission required.  Skipping {tc.net.ID.ToString()}");
                     continue;
