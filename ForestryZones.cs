@@ -114,14 +114,14 @@ namespace Oxide.Plugins
             if (zones.Length == 0) return null;
             foreach (string zone in zones)
             {
-                DoLog($"OETD: Tree in zone {zone}");
+                DoLog($"OnEntityTakeDamage: Tree in zone {zone}");
                 if (zoneIDs.Contains(zone))
                 {
                     if (tc != null && CheckPerms(tc.OwnerID, player.userID))
                     {
                         return null;
                     }
-                    DoLog($"OETD: Found protected tree in {zone}");
+                    DoLog($"OnEntityTakeDamage: Found protected tree in {zone}");
                     if (!notified.ContainsKey(player.userID))
                     {
                         notified.Add(player.userID, new List<string>());
@@ -150,14 +150,14 @@ namespace Oxide.Plugins
                 if (zones.Length == 0) return null;
                 foreach (string zone in zones)
                 {
-                    Puts($"Tree in zone {zone}");
+                    DoLog($"OnDispenserGather: Tree in zone {zone}");
                     if (zoneIDs.Contains(zone))
                     {
                         if (tc != null && CheckPerms(tc.OwnerID, player.userID))
                         {
                             return null;
                         }
-                        DoLog($"Found protected tree in {zone}");
+                        DoLog($"OnDispenserGather: Found protected tree in {zone}");
                         return true;
                     }
                 }
@@ -177,14 +177,14 @@ namespace Oxide.Plugins
                 if (zones.Length == 0) return null;
                 foreach (string zone in zones)
                 {
-                    Puts($"Tree in zone {zone}");
+                    Puts($"OnDispenserBonus: Tree in zone {zone}");
                     if (zoneIDs.Contains(zone))
                     {
                         if (tc != null && CheckPerms(tc.OwnerID, player.userID))
                         {
                             return null;
                         }
-                        DoLog($"Found protected tree in {zone}");
+                        DoLog($"OnDispenserBonus: Found protected tree in {zone}");
                         return true;
                     }
                 }
