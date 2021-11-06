@@ -1,0 +1,300 @@
+﻿using Newtonsoft.Json;
+using Oxide.Core;
+using Oxide.Core.Plugins;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+
+namespace Oxide.Plugins
+{
+    [Info("Forestry Zones", "RFC1920", "1.0.1")]
+    [Description("Protect the forest in specific areas, specifically around TCs.")]
+    internal class ForestryZones : RustPlugin
+    {
+        [PluginReference]
+        private readonly Plugin ZoneManager, Friends, Clans;
+
+        private ConfigData configData;
+        private const string permFZones = "forestryzones.use";
+        private List<string> zoneIDs = new List<string>();
+        private List<ulong> protectedTCs = new List<ulong>();
+
+        private void OnServerInitialized()
+        {
+            LoadConfigVariables();
+            foreach (BuildingPrivlidge tc in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
+            {
+                if (!tc.IsValid()) continue;
+
+                BasePlayer pl = BasePlayer.FindByID(tc.OwnerID);
+                if (pl == null) continue;
+                if (pl?.IPlayer.HasPermission(permFZones) == false && configData.requirePermission)
+                {
+                    DoLog($"Permission required.  Skipping {tc.net.ID.ToString()}");
+                    continue;
+                }
+                CreateZone(tc);
+            }
+        }
+
+        private void Unload()
+        {
+            foreach (string zoneID in zoneIDs)
+            {
+                ZoneManager?.Call("EraseZone", zoneID);
+            }
+        }
+
+        private void OnEntitySpawned(BuildingPrivlidge tc)
+        {
+            BasePlayer pl = BasePlayer.FindByID(tc.OwnerID);
+            if (pl?.IPlayer.HasPermission(permFZones) == false && configData.requirePermission)
+            {
+                return;
+            }
+            CreateZone(tc);
+        }
+
+        private BuildingPrivlidge GetLocalTC(BaseEntity tree)
+        {
+            if (configData.allowOwner || configData.useFriends || configData.useClans || configData.useTeams)
+            {
+                // Find any matching TC in the protectionRadius
+                List<BuildingPrivlidge> tcs = new List<BuildingPrivlidge>();
+                Vis.Entities(tree.transform.position, configData.protectionRadius, tcs);
+                foreach (BuildingPrivlidge tc in tcs)
+                {
+                    return tc;
+                }
+            }
+
+            return null;
+        }
+
+        private object OnEntityTakeDamage(TreeEntity tree, HitInfo hitinfo)
+        {
+            BasePlayer player = hitinfo.Initiator as BasePlayer;
+            if (player == null) return null;
+
+            BuildingPrivlidge tc = GetLocalTC(tree);
+
+            string[] zones = GetEntityZones(tree);
+            if (zones.Length == 0) return null;
+            foreach (string zone in zones)
+            {
+                DoLog($"OETD: Tree in zone {zone}");
+                if (zoneIDs.Contains(zone))
+                {
+                    if (tc != null && CheckPerms(tc.OwnerID, player.userID))
+                    {
+                        return null;
+                    }
+                    DoLog($"OETD: Found protected tree in {zone}");
+                    return true;
+                }
+            }
+
+            return null;
+        }
+
+        private object OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
+        {
+            TreeEntity tree = dispenser.GetComponentInParent<TreeEntity>();
+            BasePlayer player = entity as BasePlayer;
+
+            if (tree != null)
+            {
+                BuildingPrivlidge tc = GetLocalTC(tree);
+                string[] zones = GetEntityZones(tree);
+                if (zones.Length == 0) return null;
+                foreach (string zone in zones)
+                {
+                    Puts($"Tree in zone {zone}");
+                    if (zoneIDs.Contains(zone))
+                    {
+                        if (tc != null && CheckPerms(tc.OwnerID, player.userID))
+                        {
+                            return null;
+                        }
+                        DoLog($"Found protected tree in {zone}");
+                        return true;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private object OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item)
+        {
+            var tree = dispenser.GetComponentInParent<TreeEntity>();
+
+            if (tree != null)
+            {
+                BuildingPrivlidge tc = GetLocalTC(tree);
+                string[] zones = GetEntityZones(tree);
+                if (zones.Length == 0) return null;
+                foreach (string zone in zones)
+                {
+                    Puts($"Tree in zone {zone}");
+                    if (zoneIDs.Contains(zone))
+                    {
+                        if (tc != null && CheckPerms(tc.OwnerID, player.userID))
+                        {
+                            return null;
+                        }
+                        DoLog($"Found protected tree in {zone}");
+                        return true;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private class ConfigData
+        {
+            [JsonProperty(PropertyName = "Require permission to prevent harvesting of trees")]
+            public bool requirePermission;
+
+            [JsonProperty(PropertyName = "Allow building owner to harvest trees")]
+            public bool allowOwner;
+
+            [JsonProperty(PropertyName = "Use Friends plugin to allow harvesting by friends")]
+            public bool useFriends;
+
+            [JsonProperty(PropertyName = "Use Clans plugin to allow harvesting by clan members")]
+            public bool useClans;
+
+            [JsonProperty(PropertyName = "Use Rust Teams to allow harvesting by team members")]
+            public bool useTeams;
+
+            [JsonProperty(PropertyName = "Radius of zone around building")]
+            public float protectionRadius;
+
+            public bool debug;
+            public VersionNumber Version;
+        }
+
+        protected override void LoadDefaultConfig()
+        {
+            Puts("Creating new config file.");
+            ConfigData config = new ConfigData
+            {
+                protectionRadius = 120f,
+                Version = Version
+            };
+            SaveConfig(config);
+        }
+
+        private void LoadConfigVariables()
+        {
+            configData = Config.ReadObject<ConfigData>();
+            configData.Version = Version;
+            SaveConfig(configData);
+        }
+
+        private void SaveConfig(ConfigData config)
+        {
+            Config.WriteObject(config, true);
+        }
+
+        /// <summary>
+        /// Check player against tc owner perms
+        /// </summary>
+        /// <param name="ownerid"></param>
+        /// <param name="playerid"></param>
+        private bool CheckPerms(ulong ownerid, ulong playerid)
+        {
+            if (ownerid == playerid || IsFriend(playerid, ownerid))
+            {
+                if (configData.allowOwner && !configData.requirePermission)
+                {
+                    return true;
+                }
+                else if (configData.allowOwner && permission.UserHasPermission(ownerid.ToString(), permFZones))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Create Zone around placed TC
+        /// </summary>
+        /// <param name="tc"></param>
+        private void CreateZone(BuildingPrivlidge tc)
+        {
+            string zoneID = RandomString();
+            string[] zoneArgs = { "name", "ForestryZones", "radius", configData.protectionRadius.ToString() };
+
+            DoLog($"Creating zone {zoneID} for TC 'ForestryZones' at {tc.transform.position.ToString()}");
+            ZoneManager.Call("CreateOrUpdateZone", zoneID, zoneArgs, tc.transform.position);
+            zoneIDs.Add(zoneID);
+            protectedTCs.Add(tc.net.ID);
+        }
+
+        public static string RandomString(int length = 16)
+        {
+            List<char> charList = "0123456789".ToList();
+            string random = "";
+
+            for (int i = 0; i <= length; i++)
+            {
+                random += charList[UnityEngine.Random.Range(0, charList.Count - 1)];
+            }
+            return random;
+        }
+
+        private string[] GetEntityZones(BaseEntity entity)
+        {
+            if (ZoneManager && entity.IsValid())
+            {
+                return (string[])ZoneManager?.Call("GetEntityZoneIDs", new object[] { entity });
+            }
+            return new string[0];
+        }
+
+        private bool IsFriend(ulong playerid, ulong ownerid)
+        {
+            if (configData.useFriends && Friends != null)
+            {
+                object fr = Friends?.CallHook("AreFriends", playerid, ownerid);
+                if (fr != null && (bool)fr)
+                {
+                    DoLog($"Friends plugin reports that {playerid.ToString()} and {ownerid.ToString()} are friends.");
+                    return true;
+                }
+            }
+            if (configData.useClans && Clans != null)
+            {
+                string playerclan = (string)Clans?.CallHook("GetClanOf", playerid);
+                string ownerclan = (string)Clans?.CallHook("GetClanOf", ownerid);
+                if (playerclan != null && ownerclan != null && playerclan == ownerclan)
+                {
+                    DoLog($"Clans plugin reports that {playerid.ToString()} and {ownerid.ToString()} are clanmates.");
+                    return true;
+                }
+            }
+            if (configData.useTeams)
+            {
+                BasePlayer player = BasePlayer.FindByID(playerid);
+                if (player != null && player.currentTeam != 0)
+                {
+                    RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindTeam(player.currentTeam);
+                    if (playerTeam?.members.Contains(ownerid) == true)
+                    {
+                        DoLog($"Rust teams reports that {playerid.ToString()} and {ownerid.ToString()} are on the same team.");
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private void DoLog(string message)
+        {
+            if (configData.debug) Puts($"{message}");
+        }
+    }
+}
