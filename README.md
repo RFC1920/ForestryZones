@@ -2,6 +2,7 @@
 Places forest-friendly zones around building privilege
 
 Requires: ZoneManager
+
 Uses: Friends, Clans, and Rust teams
 
 The area of protection is based on a ZoneManager zone surrounding the TC, not on building privilege, so ZoneManager is required.
