@@ -28,7 +28,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.2")]
+    [Info("Forestry Zones", "RFC1920", "1.0.3")]
     [Description("Protect the forest in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -57,6 +57,11 @@ namespace Oxide.Plugins
                 }
                 CreateZone(tc);
             }
+        }
+
+        private void Init()
+        {
+            permission.RegisterPermission(permFZones, this);
         }
 
         private void Unload()
