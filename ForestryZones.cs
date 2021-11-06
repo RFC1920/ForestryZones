@@ -1,4 +1,4 @@
-﻿#region License (GPL v3)
+#region License (GPL v3)
 /*
     Copyright (c) 2021 RFC1920 <desolationoutpostpve@gmail.com>
 
@@ -28,7 +28,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.1")]
+    [Info("Forestry Zones", "RFC1920", "1.0.2")]
     [Description("Protect the forest in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -39,6 +39,7 @@ namespace Oxide.Plugins
         private const string permFZones = "forestryzones.use";
         private List<string> zoneIDs = new List<string>();
         private List<ulong> protectedTCs = new List<ulong>();
+        private Dictionary<ulong, List<string>> notified = new Dictionary<ulong, List<string>>();
 
         private void OnServerInitialized()
         {
@@ -111,6 +112,15 @@ namespace Oxide.Plugins
                         return null;
                     }
                     DoLog($"OETD: Found protected tree in {zone}");
+                    if (!notified.ContainsKey(player.userID))
+                    {
+                        notified.Add(player.userID, new List<string>());
+                    }
+                    if (!notified[player.userID].Contains(zone))
+                    {
+                        SendReply(player, configData.message);
+                        notified[player.userID].Add(zone);
+                    }
                     return true;
                 }
             }
@@ -189,6 +199,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Use Rust Teams to allow harvesting by team members")]
             public bool useTeams;
 
+            [JsonProperty(PropertyName = "Message to send to offending player")]
+            public string message;
+
             [JsonProperty(PropertyName = "Radius of zone around building")]
             public float protectionRadius;
 
@@ -201,6 +214,7 @@ namespace Oxide.Plugins
             Puts("Creating new config file.");
             ConfigData config = new ConfigData
             {
+                message = "This area is protected by the local Forestry Service.",
                 protectionRadius = 120f,
                 Version = Version
             };
@@ -210,6 +224,11 @@ namespace Oxide.Plugins
         private void LoadConfigVariables()
         {
             configData = Config.ReadObject<ConfigData>();
+
+            if (configData.Version < new VersionNumber(1, 0, 2))
+            {
+                configData.message = "This area is protected by the local Forestry Service.";
+            }
             configData.Version = Version;
             SaveConfig(configData);
         }

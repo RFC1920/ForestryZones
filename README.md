@@ -18,12 +18,13 @@ One optional permission exists, forestryzones.use.  If the configuration setting
   "Use Friends plugin to allow harvesting by friends": false,
   "Use Clans plugin to allow harvesting by clan members": false,
   "Use Rust Teams to allow harvesting by team members": false,
+  "Message to send to offending player": "This area is protected by the local Forestry Service.",
   "Radius of zone around building": 120.0,
   "debug": false,
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 1
+    "Patch": 2
   }
 }
 ```
@@ -35,6 +36,8 @@ To allow only the owner to harvest trees in this range, set "Allow building owne
 To allow their friends, clan or team members to harvest, set one or more of the other associated configs to true.
 
 Adjust the radius as desired to fit your play style and map.
+
+Anyone hitting a tree in a protected zone will get the "Message to send to offending player" message once per zone per plugin load.
 
 ## Inspiration and notes
 The idea is to keep a few trees around and maintain the beauty of Rust for PVE and casual players.
