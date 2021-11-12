@@ -23,12 +23,11 @@ using Newtonsoft.Json;
 using Oxide.Core;
 using Oxide.Core.Plugins;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.4")]
+    [Info("Forestry Zones", "RFC1920", "1.0.5")]
     [Description("Protect the forest in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -40,10 +39,18 @@ namespace Oxide.Plugins
         private List<string> zoneIDs = new List<string>();
         private List<ulong> protectedTCs = new List<ulong>();
         private Dictionary<ulong, List<string>> notified = new Dictionary<ulong, List<string>>();
+        private bool isEnabled;
+
+        private void Init()
+        {
+            permission.RegisterPermission(permFZones, this);
+
+            LoadConfigVariables();
+            isEnabled = true;
+        }
 
         private void OnServerInitialized()
         {
-            LoadConfigVariables();
             foreach (BuildingPrivlidge tc in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
             {
                 DoLog($"Checking TC at {tc.transform.position.ToString()}");
@@ -64,11 +71,6 @@ namespace Oxide.Plugins
             }
         }
 
-        private void Init()
-        {
-            permission.RegisterPermission(permFZones, this);
-        }
-
         private void Unload()
         {
             foreach (string zoneID in zoneIDs)
@@ -77,10 +79,23 @@ namespace Oxide.Plugins
             }
         }
 
+        private void OnServerShutdown()
+        {
+            foreach (string zone in (string[]) ZoneManager?.Call("GetZoneIDs"))
+            {
+                string nom = (string)ZoneManager?.Call("GetZoneName", zone);
+                if (nom == "ForestryZones")
+                {
+                    ZoneManager?.Call("EraseZone", zone);
+                }
+            }
+        }
+
         private void OnEntitySpawned(BuildingPrivlidge tc)
         {
+            if (!isEnabled) return;
             BasePlayer pl = BasePlayer.FindByID(tc.OwnerID);
-            if (pl?.IPlayer.HasPermission(permFZones) == false && configData.requirePermission)
+            if (!permission.UserHasPermission(pl?.UserIDString, permFZones) && configData.requirePermission)
             {
                 return;
             }
@@ -275,25 +290,15 @@ namespace Oxide.Plugins
         /// <param name="tc"></param>
         private void CreateZone(BuildingPrivlidge tc)
         {
-            string zoneID = RandomString();
-            string[] zoneArgs = { "name", "ForestryZones", "radius", configData.protectionRadius.ToString() };
+            if (tc == null) return;
+            string zoneID = UnityEngine.Random.Range(1, 99999999).ToString();
+            int radius = (int) configData.protectionRadius;
+            string[] zoneArgs = { "name", "ForestryZones", "radius", radius.ToString() };
 
-            DoLog($"Creating zone {zoneID} for TC 'ForestryZones' at {tc.transform.position.ToString()}");
+            DoLog($"Creating zone {zoneID} for TC 'ForestryZones' with radius {radius.ToString()} at {tc.transform.position.ToString()}");
             ZoneManager.Call("CreateOrUpdateZone", zoneID, zoneArgs, tc.transform.position);
             zoneIDs.Add(zoneID);
             protectedTCs.Add(tc.net.ID);
-        }
-
-        public static string RandomString(int length = 16)
-        {
-            List<char> charList = "0123456789".ToList();
-            string random = "";
-
-            for (int i = 0; i <= length; i++)
-            {
-                random += charList[UnityEngine.Random.Range(0, charList.Count - 1)];
-            }
-            return random;
         }
 
         private string[] GetEntityZones(BaseEntity entity)
