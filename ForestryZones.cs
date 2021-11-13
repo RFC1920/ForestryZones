@@ -192,7 +192,7 @@ namespace Oxide.Plugins
                 if (zones.Length == 0) return null;
                 foreach (string zone in zones)
                 {
-                    Puts($"OnDispenserBonus: Tree in zone {zone}");
+                    DoLog($"OnDispenserBonus: Tree in zone {zone}");
                     if (zoneIDs.Contains(zone))
                     {
                         if (tc != null && CheckPerms(tc.OwnerID, player.userID))
