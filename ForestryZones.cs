@@ -27,7 +27,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.5")]
+    [Info("Forestry Zones", "RFC1920", "1.0.6")]
     [Description("Protect the forest in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -46,11 +46,11 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permFZones, this);
 
             LoadConfigVariables();
-            isEnabled = true;
         }
 
         private void OnServerInitialized()
         {
+            isEnabled = true;
             foreach (BuildingPrivlidge tc in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
             {
                 DoLog($"Checking TC at {tc.transform.position.ToString()}");
