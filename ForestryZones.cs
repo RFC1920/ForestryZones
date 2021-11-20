@@ -27,7 +27,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.6")]
+    [Info("Forestry Zones", "RFC1920", "1.0.7")]
     [Description("Protect the forest in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -36,8 +36,8 @@ namespace Oxide.Plugins
 
         private ConfigData configData;
         private const string permFZones = "forestryzones.use";
+        private Dictionary<ulong, string> tcToZone = new Dictionary<ulong, string>();
         private List<string> zoneIDs = new List<string>();
-        private List<ulong> protectedTCs = new List<ulong>();
         private Dictionary<ulong, List<string>> notified = new Dictionary<ulong, List<string>>();
         private bool isEnabled;
 
@@ -46,21 +46,42 @@ namespace Oxide.Plugins
             permission.RegisterPermission(permFZones, this);
 
             LoadConfigVariables();
+            LoadData();
         }
 
         private void OnServerInitialized()
         {
             isEnabled = true;
+        }
+
+        private void Loaded()
+        {
+            foreach (KeyValuePair<ulong, string> zonemap in tcToZone)
+            {
+                ZoneManager?.Call("EraseZone", zonemap.Value);
+                DoLog($"Erased ForestryZone {zonemap.Value}");
+            }
+            tcToZone = new Dictionary<ulong, string>();
+            SaveData();
+
             foreach (BuildingPrivlidge tc in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
             {
                 DoLog($"Checking TC at {tc.transform.position.ToString()}");
-                if (!(tc as BaseEntity).IsValid()) continue;
+                if (!(tc as BaseEntity).IsValid())
+                {
+                    DoLog("Invalid TC.  Skipping...");
+                    continue;
+                }
 
                 BasePlayer pl = BasePlayer.FindByID(tc.OwnerID);
                 if (pl == null)
                 {
                     pl = BasePlayer.FindSleeping(tc.OwnerID);
-                    if (pl == null) continue;
+                    if (pl == null)
+                    {
+                        DoLog("No valid owner, or owner is server.  Skipping...");
+                        continue;
+                    }
                 }
                 if (!permission.UserHasPermission(pl.UserIDString, permFZones) && configData.requirePermission)
                 {
@@ -73,21 +94,10 @@ namespace Oxide.Plugins
 
         private void Unload()
         {
-            foreach (string zoneID in zoneIDs)
+            foreach (KeyValuePair<ulong, string> zonemap in tcToZone)
             {
-                ZoneManager?.Call("EraseZone", zoneID);
-            }
-        }
-
-        private void OnServerShutdown()
-        {
-            foreach (string zone in (string[]) ZoneManager?.Call("GetZoneIDs"))
-            {
-                string nom = (string)ZoneManager?.Call("GetZoneName", zone);
-                if (nom == "ForestryZones")
-                {
-                    ZoneManager?.Call("EraseZone", zone);
-                }
+                ZoneManager?.Call("EraseZone", zonemap.Value);
+                DoLog($"Erased ForestryZone {zonemap.Value}");
             }
         }
 
@@ -100,6 +110,20 @@ namespace Oxide.Plugins
                 return;
             }
             CreateZone(tc);
+        }
+
+        private void LoadData()
+        {
+            tcToZone = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, string>>(Name + "/tcToZone");
+            foreach (KeyValuePair<ulong, string> zonemap in tcToZone)
+            {
+                zoneIDs.Add(zonemap.Value);
+            }
+        }
+
+        private void SaveData()
+        {
+            Interface.Oxide.DataFileSystem.WriteObject(Name + "/tcToZone", tcToZone);
         }
 
         private BuildingPrivlidge GetLocalTC(BaseEntity tree)
@@ -230,6 +254,9 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Radius of zone around building")]
             public float protectionRadius;
 
+            [JsonProperty(PropertyName = "Allow overlap with existing zone")]
+            public bool allowZoneOverlap;
+
             public bool debug;
             public VersionNumber Version;
         }
@@ -263,11 +290,6 @@ namespace Oxide.Plugins
             Config.WriteObject(config, true);
         }
 
-        /// <summary>
-        /// Check player against tc owner perms
-        /// </summary>
-        /// <param name="ownerid"></param>
-        /// <param name="playerid"></param>
         private bool CheckPerms(ulong ownerid, ulong playerid)
         {
             if (ownerid == playerid || IsFriend(playerid, ownerid))
@@ -284,21 +306,53 @@ namespace Oxide.Plugins
             return false;
         }
 
-        /// <summary>
-        /// Create Zone around placed TC
-        /// </summary>
-        /// <param name="tc"></param>
         private void CreateZone(BuildingPrivlidge tc)
         {
             if (tc == null) return;
-            string zoneID = UnityEngine.Random.Range(1, 99999999).ToString();
-            int radius = (int) configData.protectionRadius;
-            string[] zoneArgs = { "name", "ForestryZones", "radius", radius.ToString() };
 
-            DoLog($"Creating zone {zoneID} for TC 'ForestryZones' with radius {radius.ToString()} at {tc.transform.position.ToString()}");
-            ZoneManager.Call("CreateOrUpdateZone", zoneID, zoneArgs, tc.transform.position);
-            zoneIDs.Add(zoneID);
-            protectedTCs.Add(tc.net.ID);
+            bool fz_exists = false;
+            string inzone = "";
+
+            foreach (string zone in GetEntityZones(tc))
+            {
+                // Check existing zones to prevent creating new zones on each load.
+                // Also check for overlap with zones from other plugins.
+                string nom = (string)ZoneManager?.Call("GetZoneName", zone);
+                if (nom == "ForestryZones")
+                {
+                    fz_exists = true;
+                    DoLog($"Found TC in existing zone {zone} at {tc.transform.position.ToString()}.  Adding to tables and skipping re-creation.");
+                    if (!tcToZone.ContainsKey(tc.net.ID))
+                    {
+                        tcToZone.Add(tc.net.ID, zone);
+                        zoneIDs.Add(zone);
+                    }
+                    break;
+                }
+
+                inzone = nom;
+                break;
+            }
+
+            if (!fz_exists)
+            {
+                if (!string.IsNullOrEmpty(inzone) && !configData.allowZoneOverlap)
+                {
+                    DoLog($"TC in overlapping zone, {inzone}.  Skipping ForestryZone creation.");
+                    return;
+                }
+
+                string zoneID = UnityEngine.Random.Range(1, 99999999).ToString();
+                int radius = (int)configData.protectionRadius;
+                string[] zoneArgs = { "name", "ForestryZones", "radius", radius.ToString() };
+
+                DoLog($"Creating zone {zoneID} for TC 'ForestryZones' with radius {radius.ToString()} at {tc.transform.position.ToString()}");
+                ZoneManager.Call("CreateOrUpdateZone", zoneID, zoneArgs, tc.transform.position);
+
+                tcToZone.Add(tc.net.ID, zoneID);
+                zoneIDs.Add(zoneID);
+            }
+            SaveData();
         }
 
         private string[] GetEntityZones(BaseEntity entity)
