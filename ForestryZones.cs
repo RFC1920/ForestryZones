@@ -27,8 +27,8 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.7")]
-    [Description("Protect the forest in specific areas, specifically around TCs.")]
+    [Info("Forestry Zones", "RFC1920", "1.0.8")]
+    [Description("Protect the forest and ore deposits in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
         [PluginReference]
@@ -62,6 +62,7 @@ namespace Oxide.Plugins
                 DoLog($"Erased ForestryZone {zonemap.Value}");
             }
             tcToZone = new Dictionary<ulong, string>();
+            zoneIDs = new List<string>();
             SaveData();
 
             foreach (BuildingPrivlidge tc in Resources.FindObjectsOfTypeAll<BuildingPrivlidge>())
@@ -177,9 +178,45 @@ namespace Oxide.Plugins
             return null;
         }
 
+        private object OnEntityTakeDamage(OreResourceEntity ore, HitInfo hitinfo)
+        {
+            BasePlayer player = hitinfo.Initiator as BasePlayer;
+            if (player == null) return null;
+
+            BuildingPrivlidge tc = GetLocalTC(ore);
+
+            string[] zones = GetEntityZones(ore);
+            if (zones.Length == 0) return null;
+            foreach (string zone in zones)
+            {
+                DoLog($"OnEntityTakeDamage: Ore in zone {zone}");
+                if (zoneIDs.Contains(zone))
+                {
+                    if (tc != null && CheckPerms(tc.OwnerID, player.userID))
+                    {
+                        return null;
+                    }
+                    DoLog($"OnEntityTakeDamage: Found protected ore in {zone}");
+                    if (!notified.ContainsKey(player.userID))
+                    {
+                        notified.Add(player.userID, new List<string>());
+                    }
+                    if (!notified[player.userID].Contains(zone))
+                    {
+                        SendReply(player, configData.message);
+                        notified[player.userID].Add(zone);
+                    }
+                    return true;
+                }
+            }
+
+            return null;
+        }
+
         private object OnDispenserGather(ResourceDispenser dispenser, BaseEntity entity, Item item)
         {
             TreeEntity tree = dispenser.GetComponentInParent<TreeEntity>();
+            OreResourceEntity ore = dispenser.GetComponentInParent<OreResourceEntity>();
             BasePlayer player = entity as BasePlayer;
 
             if (tree != null)
@@ -201,13 +238,32 @@ namespace Oxide.Plugins
                     }
                 }
             }
-
+            else if (ore != null && configData.protectOreDeposits)
+            {
+                BuildingPrivlidge tc = GetLocalTC(ore);
+                string[] zones = GetEntityZones(ore);
+                if (zones.Length == 0) return null;
+                foreach (string zone in zones)
+                {
+                    DoLog($"OnDispenserGather: ore in zone {zone}");
+                    if (zoneIDs.Contains(zone))
+                    {
+                        if (tc != null && CheckPerms(tc.OwnerID, player.userID))
+                        {
+                            return null;
+                        }
+                        DoLog($"OnDispenserGather: Found protected ore in {zone}");
+                        return true;
+                    }
+                }
+            }
             return null;
         }
 
         private object OnDispenserBonus(ResourceDispenser dispenser, BasePlayer player, Item item)
         {
-            var tree = dispenser.GetComponentInParent<TreeEntity>();
+            TreeEntity tree = dispenser.GetComponentInParent<TreeEntity>();
+            OreResourceEntity ore = dispenser.GetComponentInParent<OreResourceEntity>();
 
             if (tree != null)
             {
@@ -224,6 +280,25 @@ namespace Oxide.Plugins
                             return null;
                         }
                         DoLog($"OnDispenserBonus: Found protected tree in {zone}");
+                        return true;
+                    }
+                }
+            }
+            else if (ore != null && configData.protectOreDeposits)
+            {
+                BuildingPrivlidge tc = GetLocalTC(ore);
+                string[] zones = GetEntityZones(ore);
+                if (zones.Length == 0) return null;
+                foreach (string zone in zones)
+                {
+                    DoLog($"OnDispenserBonus: Ore in zone {zone}");
+                    if (zoneIDs.Contains(zone))
+                    {
+                        if (tc != null && CheckPerms(tc.OwnerID, player.userID))
+                        {
+                            return null;
+                        }
+                        DoLog($"OnDispenserBonus: Found protected ore in {zone}");
                         return true;
                     }
                 }
@@ -256,6 +331,9 @@ namespace Oxide.Plugins
 
             [JsonProperty(PropertyName = "Allow overlap with existing zone")]
             public bool allowZoneOverlap;
+
+            [JsonProperty(PropertyName = "Also protect ore deposits")]
+            public bool protectOreDeposits;
 
             public bool debug;
             public VersionNumber Version;
@@ -359,6 +437,7 @@ namespace Oxide.Plugins
         {
             if (ZoneManager && entity.IsValid())
             {
+                DoLog($"Checking zone for {entity.GetType()}");
                 return (string[])ZoneManager?.Call("GetEntityZoneIDs", new object[] { entity });
             }
             return new string[0];

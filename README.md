@@ -1,5 +1,5 @@
 # ForestryZones
-Places forest-friendly zones around building privilege
+Places forest-friendly zones around building privilege.  Protects trees and, optionally, ore deposits from harvesting in those areas.
 
 Requires: ZoneManager
 
@@ -20,11 +20,12 @@ One optional permission exists, forestryzones.use.  If the configuration setting
   "Use Rust Teams to allow harvesting by team members": false,
   "Message to send to offending player": "This area is protected by the local Forestry Service.",
   "Radius of zone around building": 120.0,
+  "Also protect ore deposits": false,
   "debug": false,
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 2
+    "Patch": 8
   }
 }
 ```
