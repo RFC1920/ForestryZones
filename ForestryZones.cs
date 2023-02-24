@@ -26,7 +26,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Forestry Zones", "RFC1920", "1.0.9")]
+    [Info("Forestry Zones", "RFC1920", "1.1.0")]
     [Description("Protect the forest and ore deposits in specific areas, specifically around TCs.")]
     internal class ForestryZones : RustPlugin
     {
@@ -311,7 +311,7 @@ namespace Oxide.Plugins
                 {
                     if (tc != null && !CheckPerms(tc.OwnerID, player.userID))
                     {
-                        DoLog($"OnDispenserGather: Found protected ore {Vector3.Distance(tc.transform.position, tree.transform.position)} from TC, which is within {configData.protectionRadius}");
+                        DoLog($"OnDispenserGather: Found protected ore {Vector3.Distance(tc.transform.position, ore.transform.position)} from TC, which is within {configData.protectionRadius}");
                         return true;
                     }
                     return null;
