@@ -68,7 +68,11 @@ namespace Oxide.Plugins
             {
                 foreach (KeyValuePair<ulong, string> zonemap in playertcs.Value)
                 {
+<<<<<<< HEAD
                     BaseNetworkable tc = BaseNetworkable.serverEntities.Find(new NetworkableId((uint)zonemap.Key));
+=======
+                    BaseNetworkable tc = BaseNetworkable.serverEntities.Find(new NetworkableId(zonemap.Key));
+>>>>>>> 6b7812f10b6b63dc55b257dc4cadcf90afd17a0e
                     if (tc == null) continue;
                     BuildingPrivlidge bp = tc as BuildingPrivlidge;
 
@@ -137,7 +141,11 @@ namespace Oxide.Plugins
             {
                 foreach (KeyValuePair<ulong, string> zonemap in Interface.Oxide.DataFileSystem.ReadObject<Dictionary<ulong, string>>(Name + "/tcToZone"))
                 {
+<<<<<<< HEAD
                     BuildingPrivlidge bp = BaseNetworkable.serverEntities.Find(new NetworkableId((uint)zonemap.Key)) as BuildingPrivlidge;
+=======
+                    BuildingPrivlidge bp = BaseNetworkable.serverEntities.Find(new NetworkableId(zonemap.Key)) as BuildingPrivlidge;
+>>>>>>> 6b7812f10b6b63dc55b257dc4cadcf90afd17a0e
                     if (!playerZones.ContainsKey(bp.OwnerID))
                     {
                         playerZones.Add(bp.OwnerID, new Dictionary<ulong, string>());
@@ -186,15 +194,27 @@ namespace Oxide.Plugins
             if (bn is BuildingPrivlidge)
             {
                 BuildingPrivlidge bp = bn as BuildingPrivlidge;
+<<<<<<< HEAD
                 if (playerZones.ContainsKey(bp.OwnerID) && playerZones[bp.OwnerID].ContainsKey(bp.net.ID.Value))
                 {
                     DoLog($"Removing TC {bp.net.ID} from playerZones for {bp.OwnerID}");
                     string zoneID = playerZones[bp.OwnerID]?[bp.net.ID.Value];
                     if (zoneID.Length > 0)
+=======
+                if (playerZones.ContainsKey(bp.OwnerID) && playerZones[bp.OwnerID].ContainsKey((uint)bp.net.ID.Value))
+                {
+                    DoLog($"Removing TC {bp.net.ID} from playerZones for {bp.OwnerID}");
+                    string zoneID = playerZones[bp.OwnerID]?[(uint)bp.net.ID.Value];
+                    if (zoneID.Length > 0 && configData.useZoneManager)
+>>>>>>> 6b7812f10b6b63dc55b257dc4cadcf90afd17a0e
                     {
-                        if (configData.useZoneManager) ZoneManager?.Call("EraseZone", zoneID);
+                        ZoneManager?.Call("EraseZone", zoneID);
                     }
+<<<<<<< HEAD
                     playerZones[bp.OwnerID].Remove(bp.net.ID.Value);
+=======
+                    playerZones[bp.OwnerID].Remove((uint)bp.net.ID.Value);
+>>>>>>> 6b7812f10b6b63dc55b257dc4cadcf90afd17a0e
                     SaveData();
                 }
             }
@@ -509,7 +529,11 @@ namespace Oxide.Plugins
                     fz_exists = true;
                     DoLog($"Found TC in existing zone {zone} at {tc.transform.position}.  Adding to tables and skipping re-creation.");
 
+<<<<<<< HEAD
                     AddOrUpdatePlayerZones(tc.OwnerID, tc.net.ID.Value, zone);
+=======
+                    AddOrUpdatePlayerZones(tc.OwnerID, (uint)tc.net.ID.Value, zone);
+>>>>>>> 6b7812f10b6b63dc55b257dc4cadcf90afd17a0e
                     zoneIDs.Add(zone);
                     break;
                 }
@@ -533,7 +557,11 @@ namespace Oxide.Plugins
                 DoLog($"Creating zone {zoneID} for TC 'ForestryZones' with radius {radius} at {tc.transform.position}");
                 ZoneManager.Call("CreateOrUpdateZone", zoneID, zoneArgs, tc.transform.position);
 
+<<<<<<< HEAD
                 AddOrUpdatePlayerZones(tc.OwnerID, tc.net.ID.Value, zoneID);
+=======
+                AddOrUpdatePlayerZones(tc.OwnerID, (uint)tc.net.ID.Value, zoneID);
+>>>>>>> 6b7812f10b6b63dc55b257dc4cadcf90afd17a0e
                 zoneIDs.Add(zoneID);
             }
             SaveData();
@@ -643,15 +671,10 @@ namespace Oxide.Plugins
             }
             if (configData.useTeams)
             {
-                BasePlayer player = BasePlayer.FindByID(playerid);
-                if (player != null && player.currentTeam != 0)
+                RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindPlayersTeam(playerid);
+                if (playerTeam?.members.Contains(ownerid) == true)
                 {
-                    RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindTeam(player.currentTeam);
-                    if (playerTeam?.members.Contains(ownerid) == true)
-                    {
-                        DoLog($"Rust teams reports that {playerid} and {ownerid} are on the same team.");
-                        return true;
-                    }
+                    return true;
                 }
             }
             return false;
